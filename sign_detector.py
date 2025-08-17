@@ -5,6 +5,7 @@ from ultralytics import YOLO
 import torch
 from pathlib import Path
 import argparse
+import time  # <--- 導入 time 模組
 from typing import Union, Optional, Tuple, Dict, List
 # 必需導入，用於資料格式轉換
 from mediapipe.framework.formats import landmark_pb2
@@ -18,13 +19,6 @@ class SignLanguageDetector:
                  confidence: float = 0.5):
         """
         初始化手語識別系統
-        
-        Args:
-            yolo_model_path: YOLO模型路徑
-            hand_model_path: MediaPipe手部模型路徑
-            face_model_path: MediaPipe臉部模型路徑
-            device: 運行設備 (cuda/cpu)
-            confidence: 檢測信心度閾值
         """
         # 初始化YOLO模型
         self.yolo_model = YOLO(yolo_model_path)
@@ -42,18 +36,16 @@ class SignLanguageDetector:
             from mediapipe.tasks import python
             from mediapipe.tasks.python import vision
             
-            # 手部檢測器
             hand_base_options = python.BaseOptions(model_asset_path=hand_model_path)
             hand_options = vision.HandLandmarkerOptions(
                 base_options=hand_base_options,
                 num_hands=2,
-                min_hand_detection_confidence=0.5, # 稍微降低信心度以利於全畫面檢測
+                min_hand_detection_confidence=0.5,
                 min_hand_presence_confidence=0.5,
                 min_tracking_confidence=0.5
             )
             self.hand_landmarker = vision.HandLandmarker.create_from_options(hand_options)
             
-            # 臉部檢測器
             face_base_options = python.BaseOptions(model_asset_path=face_model_path)
             face_options = vision.FaceLandmarkerOptions(
                 base_options=face_base_options,
@@ -74,8 +66,6 @@ class SignLanguageDetector:
         
         self.current_roi_coords = {'face': None}
         
-    # --- MODIFICATION ---
-    # 此函數現在只專注於提取臉部ROI
     def extract_face_roi_from_pose(self, image: np.ndarray, pose_keypoints: np.ndarray) -> Optional[np.ndarray]:
         """
         根據YOLO姿態關鍵點僅提取臉部ROI
@@ -88,7 +78,7 @@ class SignLanguageDetector:
             return None
             
         keypoints = pose_keypoints.reshape(-1, 3)
-        face_points = keypoints[0:5] # 鼻子、眼睛、耳朵
+        face_points = keypoints[0:5]
         valid_face_points = face_points[face_points[:, 2] > 0.3]
         
         if len(valid_face_points) > 0:
@@ -100,8 +90,6 @@ class SignLanguageDetector:
             if x_max > x_min and y_max > y_min:
                 face_roi = image[y_min:y_max, x_min:x_max]
                 self.current_roi_coords['face'] = (x_min, y_min, x_max, y_max)
-                
-                # 在主畫面上繪製臉部ROI框
                 cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 255, 255), 2)
                 cv2.putText(image, "Face_ROI", (x_min, y_min-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
@@ -113,7 +101,6 @@ class SignLanguageDetector:
         """
         keypoints_data = {'pose': None, 'hands': {'left': None, 'right': None}, 'face': None}
         
-        # --- 1. YOLO 姿態檢測 ---
         results = self.yolo_model(frame, conf=self.confidence, device=self.device)
         pose_keypoints = None
         if results[0].keypoints and len(results[0].keypoints.data) > 0:
@@ -121,18 +108,16 @@ class SignLanguageDetector:
             keypoints_data['pose'] = pose_keypoints
             self.draw_pose_keypoints(frame, pose_keypoints)
 
-        # --- 2. MediaPipe 手部檢測 (在完整畫面上) ---
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if self.use_task_models:
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
             hand_results = self.hand_landmarker.detect(mp_image)
-            # 分辨左右手並儲存關鍵點
             if hand_results.hand_landmarks:
                 for i, handedness in enumerate(hand_results.handedness):
                     hand_label = handedness[0].category_name.lower()
                     keypoints_data['hands'][hand_label] = hand_results.hand_landmarks[i]
                 self.draw_hand_landmarks(frame, hand_results, is_new_api=True)
-        else: # 舊版 API
+        else:
             hand_results = self.hands.process(rgb_frame)
             if hand_results.multi_hand_landmarks:
                 for i, handedness in enumerate(hand_results.multi_handedness):
@@ -140,7 +125,6 @@ class SignLanguageDetector:
                      keypoints_data['hands'][hand_label] = hand_results.multi_hand_landmarks[i]
                 self.draw_hand_landmarks(frame, hand_results, is_new_api=False)
 
-        # --- 3. MediaPipe 臉部檢測 (使用姿態ROI) ---
         if pose_keypoints is not None:
             face_roi = self.extract_face_roi_from_pose(frame, pose_keypoints)
             if face_roi is not None and face_roi.size > 0:
@@ -151,7 +135,7 @@ class SignLanguageDetector:
                         if face_results.face_landmarks:
                             keypoints_data['face'] = face_results.face_landmarks[0]
                             self.draw_face_landmarks(frame, face_roi, face_results, is_new_api=True)
-                    else: # 舊版 API
+                    else:
                         face_results = self.face_mesh.process(cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB))
                         if face_results.multi_face_landmarks:
                             keypoints_data['face'] = face_results.multi_face_landmarks[0]
@@ -174,8 +158,6 @@ class SignLanguageDetector:
                 if start_point[2] > 0.3 and end_point[2] > 0.3:
                     cv2.line(image, (int(start_point[0]), int(start_point[1])), (int(end_point[0]), int(end_point[1])), (255, 0, 0), 2)
     
-    # --- MODIFICATION ---
-    # 此函數現在直接在主畫面上繪製
     def draw_hand_landmarks(self, frame: np.ndarray, hand_results, is_new_api: bool = True):
         """直接在主畫面上繪製手部關鍵點"""
         if is_new_api:
@@ -186,47 +168,42 @@ class SignLanguageDetector:
                         landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in hand_landmarks_list
                     ])
                     self.mp_drawing.draw_landmarks(
-                        frame, # 直接在 frame 上繪製
+                        frame,
                         hand_landmarks_proto,
                         self.mp_hands.HAND_CONNECTIONS,
                         self.mp_drawing_styles.get_default_hand_landmarks_style(),
                         self.mp_drawing_styles.get_default_hand_connections_style())
-        else: # 舊版 API
+        else:
             if hand_results.multi_hand_landmarks:
                 for hand_landmarks in hand_results.multi_hand_landmarks:
                     self.mp_drawing.draw_landmarks(
-                        frame, # 直接在 frame 上繪製
+                        frame,
                         hand_landmarks,
                         self.mp_hands.HAND_CONNECTIONS,
                         self.mp_drawing_styles.get_default_hand_landmarks_style(),
                         self.mp_drawing_styles.get_default_hand_connections_style())
 
-    # --- MODIFICATION ---
-    # 此函數現在會繪製所有臉部點
     def draw_face_landmarks(self, frame: np.ndarray, face_roi: np.ndarray, face_results, is_new_api: bool = True):
         """繪製臉部網格和所有478個關鍵點"""
         roi_coords = self.current_roi_coords.get('face')
         if not roi_coords: return
             
         x_min, y_min, _, _ = roi_coords
-        # 建立一個指向主frame中ROI區域的視圖，直接在此繪圖
         target_image = frame[y_min:y_min+face_roi.shape[0], x_min:x_min+face_roi.shape[1]]
 
         landmarks_to_draw = []
         if is_new_api and face_results.face_landmarks:
             landmarks_to_draw = face_results.face_landmarks
         elif not is_new_api and face_results.multi_face_landmarks:
-            # 舊版API的結果可以直接使用
             for landmarks in face_results.multi_face_landmarks:
                 self.mp_drawing.draw_landmarks(
                     image=target_image,
                     landmark_list=landmarks,
-                    connections=self.mp_face.FACEMESH_TESSELATION, # 繪製完整網格
-                    landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=-1, circle_radius=1), # 繪製點
+                    connections=self.mp_face.FACEMESH_TESSELATION,
+                    landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=-1, circle_radius=1),
                     connection_drawing_spec=self.mp_drawing_styles.get_default_face_mesh_tesselation_style())
             return
         
-        # 處理新版API的結果
         for face_landmarks_list in landmarks_to_draw:
             face_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
             face_landmarks_proto.landmark.extend([
@@ -235,12 +212,13 @@ class SignLanguageDetector:
             self.mp_drawing.draw_landmarks(
                 image=target_image,
                 landmark_list=face_landmarks_proto,
-                connections=self.mp_face.FACEMESH_TESSELATION, # 繪製完整網格
-                landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=-1, circle_radius=1), # 繪製點
+                connections=self.mp_face.FACEMESH_TESSELATION,
+                landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=-1, circle_radius=1),
                 connection_drawing_spec=self.mp_drawing_styles.get_default_face_mesh_tesselation_style())
 
+    # --- MODIFIED FUNCTION ---
     def process_realtime(self, camera_id: int = 0):
-        """即時攝像頭處理"""
+        """即時攝像頭處理，並計算真實的處理幀率"""
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():
             print(f"錯誤: 無法開啟攝像頭 ID {camera_id}")
@@ -250,16 +228,35 @@ class SignLanguageDetector:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         print("即時手語識別已啟動，按 'q' 退出")
         
+        # 用於計算真實FPS的變數
+        prev_time = 0
+        
         try:
             while cap.isOpened():
                 ret, frame = cap.read()
-                if not ret: break
+                if not ret:
+                    break
+                
+                # --- 開始計時 ---
+                start_time = time.time()
                 
                 processed_frame, keypoints = self.process_frame(frame)
                 
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                cv2.putText(processed_frame, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                # --- 結束計時並計算真實FPS ---
+                current_time = time.time()
+                # 避免除以零的錯誤
+                if (current_time - prev_time) > 0:
+                    real_fps = 1 / (current_time - prev_time)
+                else:
+                    real_fps = 0
+                prev_time = current_time
                 
+                # 在畫面上顯示真實的FPS
+                fps_text = f"Real FPS: {real_fps:.1f}"
+                cv2.putText(processed_frame, fps_text, (10, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2) # 用紅色顯示以示區別
+                
+                # 顯示檢測狀態
                 status_y = 70
                 status_info = [
                     ("Pose", keypoints['pose'] is not None),
@@ -274,6 +271,7 @@ class SignLanguageDetector:
                     status_y += 30
 
                 cv2.imshow('Sign Language Detection', processed_frame)
+                
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
         finally:
