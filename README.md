@@ -115,11 +115,12 @@ python main.py --mode realtime
                     ... 16 more ...
                 ],
                 "left_hand": [
-                    { "id": 0, "x": 810.2, "y": 450.7, "confidence": 0.99 },
+                    { "id": 0, "x": 410.2, "y": 450.7, "confidence": 0.99 },
                     ... 20 more ...
                 ],
                 "right_hand": [
-                    ...
+                    { "id": 0, "x": 810.2, "y": 450.7, "confidence": 0.99 },
+                    ... 20 more ...
                 ],
                 "face": [
                     { "id": 0, "x": 630.1, "y": 280.6, "confidence": 1.0 },
