@@ -1,9 +1,6 @@
 # Multi-Pose: A Mesh-Structured Network of Keypoints for Landmark Detection
 *(多模態姿態：用於特徵點偵測的網格結構化關鍵點網絡)*
 
-![Demo GIF](https_github_com_polite-AI_Real-time-Sign-Language-to-Speech-Conversion/assets/95745582/d0ba326b-d3a9-467f-94a2-97210986716d)
-*(建議：請將上方連結替換為您自己錄製的專案展示 GIF 或圖片)*
-
 **Multi-Pose** 是一個高效能、即時的框架，專為捕捉人體全面的動態特徵點而設計。本框架的核心思想是融合不同模型的優勢——結合 **YOLOv8-Pose** 的快速全身姿態估計與 **Google MediaPipe** 的高精度手部及臉部細節——從而為單一人物生成一個統一的、網格結構化的 **537個特徵點（Landmarks）** 網絡。
 
 這個系統不僅僅是一個偵測工具，它更是一個強大的數據採集引擎，為手語辨識 (SLR)、虛擬化身控制 (Avatar Control)、情感分析 (Emotion Analysis) 和進階人機互動 (HCI) 等應用提供了極其豐富、結構化的數據來源。
