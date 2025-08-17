@@ -1,3 +1,6 @@
+# Files
+*.json
+*.mp4
 # Python
 __pycache__/
 *.py[cod]
