@@ -3,9 +3,8 @@ import mediapipe as mp
 import numpy as np
 import os
 import argparse
+import time
 from pathlib import Path
-from mediapipe import solutions
-from mediapipe.framework.formats import landmark_pb2
 
 class FaceLandmarkDetector:
     def __init__(self, model_path=None, min_detection_confidence=0.5, min_tracking_confidence=0.5):
@@ -20,6 +19,12 @@ class FaceLandmarkDetector:
         self.mp_face_mesh = mp.solutions.face_mesh
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        
+        # FPS 計算相關
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
+        self.fps_update_interval = 30  # 每30幀更新一次FPS顯示
         
         # 設定模型路徑
         self.models_dir = Path("models")
@@ -81,146 +86,56 @@ class FaceLandmarkDetector:
                 min_tracking_confidence=min_tracking_confidence
             )
             self.use_new_api = False
-        
-        # 定義人臉關鍵點的連接線
-        self.face_connections = [
-            # 臉部輪廓
-            self.mp_face_mesh.FACEMESH_FACE_OVAL,
-            # 左眼
-            self.mp_face_mesh.FACEMESH_LEFT_EYE,
-            # 右眼  
-            self.mp_face_mesh.FACEMESH_RIGHT_EYE,
-            # 左眉毛
-            self.mp_face_mesh.FACEMESH_LEFT_EYEBROW,
-            # 右眉毛
-            self.mp_face_mesh.FACEMESH_RIGHT_EYEBROW,
-            # 嘴唇
-            self.mp_face_mesh.FACEMESH_LIPS,
-            # 鼻子
-            # 可以添加更多連接線
-        ]
     
-    def draw_landmarks(self, image, detection_result=None, results=None):
+    def update_fps(self):
         """
-        在圖像上繪製人臉關鍵點
+        更新FPS計算
+        
+        Returns:
+            當前FPS值
+        """
+        self.fps_counter += 1
+        
+        if self.fps_counter >= self.fps_update_interval:
+            current_time = time.time()
+            elapsed_time = current_time - self.fps_start_time
+            
+            if elapsed_time > 0:
+                self.current_fps = self.fps_counter / elapsed_time
+            
+            # 重置計數器
+            self.fps_counter = 0
+            self.fps_start_time = current_time
+        
+        return self.current_fps
+    
+    def draw_fps(self, image, fps):
+        """
+        在圖像右上角繪製FPS資訊
         
         Args:
             image: 輸入圖像
-            detection_result: 新API的檢測結果
-            results: 舊API的檢測結果
-        
-        Returns:
-            處理後的圖像
+            fps: 當前FPS值
         """
-        annotated_image = image.copy()
+        h, w, _ = image.shape
         
-        if self.use_new_api and detection_result:
-            # 使用新API繪製 - 使用自訂繪製方法避免兼容性問題
-            if detection_result.face_landmarks:
-                for idx, face_landmarks in enumerate(detection_result.face_landmarks):
-                    self._draw_face_landmarks_custom(annotated_image, face_landmarks, idx)
+        # 簡潔的FPS顯示在右上角
+        fps_text = f"FPS: {fps:.1f}"
+        cv2.putText(image, fps_text, (w-120, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    
+    def draw_face_count(self, image, face_count):
+        """
+        在圖像左上角繪製人臉數量
         
-        elif not self.use_new_api and results:
-            # 使用舊API繪製
-            if results.multi_face_landmarks:
-                for idx, face_landmarks in enumerate(results.multi_face_landmarks):
-                    # 繪製臉部輪廓
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_FACE_OVAL,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_contours_style()
-                    )
-                    
-                    # 繪製眼部
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_LEFT_EYE,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_iris_connections_style()
-                    )
-                    
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_RIGHT_EYE,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_iris_connections_style()
-                    )
-                    
-                    # 繪製嘴部
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_LIPS,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_contours_style()
-                    )
-                    
-                    # 添加人臉編號
-                    h, w, _ = annotated_image.shape
-                    nose_tip = face_landmarks.landmark[1]  # 鼻尖
-                    cx, cy = int(nose_tip.x * w), int(nose_tip.y * h)
-                    cv2.putText(annotated_image, f'Face {idx+1}', (cx-30, cy-20),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        
-        elif not self.use_new_api and results:
-            # 使用舊API繪製
-            if results.multi_face_landmarks:
-                for idx, face_landmarks in enumerate(results.multi_face_landmarks):
-                    # 繪製臉部輪廓
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_FACE_OVAL,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_contours_style()
-                    )
-                    
-                    # 繪製眼部
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_LEFT_EYE,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_iris_connections_style()
-                    )
-                    
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_RIGHT_EYE,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_iris_connections_style()
-                    )
-                    
-                    # 繪製嘴部
-                    self.mp_drawing.draw_landmarks(
-                        image=annotated_image,
-                        landmark_list=face_landmarks,
-                        connections=self.mp_face_mesh.FACEMESH_LIPS,
-                        landmark_drawing_spec=None,
-                        connection_drawing_spec=self.mp_drawing_styles
-                        .get_default_face_mesh_contours_style()
-                    )
-                    
-                    # 添加人臉編號
-                    h, w, _ = annotated_image.shape
-                    nose_tip = face_landmarks.landmark[1]  # 鼻尖
-                    cx, cy = int(nose_tip.x * w), int(nose_tip.y * h)
-                    cv2.putText(annotated_image, f'Face {idx+1}', (cx-30, cy-20),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        
-        return annotated_image
+        Args:
+            image: 輸入圖像
+            face_count: 人臉數量
+        """
+        # 簡潔的人臉數量顯示在左上角
+        face_text = f"Faces: {face_count}"
+        cv2.putText(image, face_text, (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     
     def _draw_face_landmarks_custom(self, image, face_landmarks, face_id):
         """
@@ -349,6 +264,45 @@ class FaceLandmarkDetector:
             cv2.putText(image, f'{len(face_landmarks)} points', (cx-50, cy-10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     
+    def draw_landmarks(self, image, detection_result=None, results=None):
+        """
+        在圖像上繪製人臉關鍵點
+        
+        Args:
+            image: 輸入圖像
+            detection_result: 新API的檢測結果
+            results: 舊API的檢測結果
+        
+        Returns:
+            處理後的圖像
+        """
+        annotated_image = image.copy()
+        
+        if self.use_new_api and detection_result:
+            # 使用新API繪製
+            if detection_result.face_landmarks:
+                for idx, face_landmarks in enumerate(detection_result.face_landmarks):
+                    self._draw_face_landmarks_custom(annotated_image, face_landmarks, idx)
+        
+        elif not self.use_new_api and results:
+            # 使用舊API繪製
+            if results.multi_face_landmarks:
+                for idx, face_landmarks in enumerate(results.multi_face_landmarks):
+                    # 簡化的繪製方式
+                    h, w, _ = annotated_image.shape
+                    for landmark in face_landmarks.landmark:
+                        x = int(landmark.x * w)
+                        y = int(landmark.y * h)
+                        cv2.circle(annotated_image, (x, y), 1, (255, 255, 255), -1)
+                    
+                    # 添加人臉編號
+                    nose_tip = face_landmarks.landmark[1]  # 鼻尖
+                    cx, cy = int(nose_tip.x * w), int(nose_tip.y * h)
+                    cv2.putText(annotated_image, f'Face {idx+1}', (cx-30, cy-20),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        
+        return annotated_image
+    
     def get_face_info(self, detection_result=None, results=None):
         """
         獲取人臉資訊
@@ -467,6 +421,9 @@ class FaceLandmarkDetector:
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        print(f"影片資訊: {width}x{height}, {fps} FPS, {total_frames} 幀")
         
         # 設定影片寫入器
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -476,10 +433,19 @@ class FaceLandmarkDetector:
         
         print("按 'q' 退出影片播放")
         
+        # 重置FPS計數器
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
+        
+        frame_count = 0
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
+            
+            frame_count += 1
             
             # 轉換顏色空間
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -489,10 +455,17 @@ class FaceLandmarkDetector:
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
                 detection_result = self.detector.detect(mp_image)
                 annotated_frame = self.draw_landmarks(frame, detection_result=detection_result)
+                face_count = len(detection_result.face_landmarks) if detection_result.face_landmarks else 0
             else:
                 # 使用舊API
                 results = self.face_mesh.process(rgb_frame)
                 annotated_frame = self.draw_landmarks(frame, results=results)
+                face_count = len(results.multi_face_landmarks) if results.multi_face_landmarks else 0
+            
+            # 更新並顯示FPS和人臉數量
+            current_fps = self.update_fps()
+            self.draw_fps(annotated_frame, current_fps)
+            self.draw_face_count(annotated_frame, face_count)
             
             # 顯示結果
             cv2.imshow('Face Landmarks - Video', annotated_frame)
@@ -510,6 +483,7 @@ class FaceLandmarkDetector:
             print(f"處理後的影片已儲存至: {output_path}")
         
         cv2.destroyAllWindows()
+        print(f"影片處理完成！平均FPS: {self.current_fps:.1f}")
     
     def process_webcam(self, camera_id=0):
         """
@@ -523,7 +497,20 @@ class FaceLandmarkDetector:
             print(f"無法開啟攝影機 {camera_id}")
             return
         
-        print("按 'q' 退出即時影像，按 's' 截圖")
+        # 設定攝影機解析度（可選）
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        
+        actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"攝影機解析度: {actual_width}x{actual_height}")
+        
+        print("按 'q' 退出即時影像，按 's' 截圖，按 'r' 重置FPS計數器")
+        
+        # 重置FPS計數器
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
         
         screenshot_count = 0
         
@@ -555,12 +542,10 @@ class FaceLandmarkDetector:
                 # 顯示人臉數量
                 face_count = len(results.multi_face_landmarks) if results.multi_face_landmarks else 0
             
-            cv2.putText(annotated_frame, f'Faces detected: {face_count}', (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
-            # 顯示操作提示
-            cv2.putText(annotated_frame, "Press 'q' to quit, 's' to screenshot", (10, 70),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            # 更新並顯示FPS和人臉數量
+            current_fps = self.update_fps()
+            self.draw_fps(annotated_frame, current_fps)
+            self.draw_face_count(annotated_frame, face_count)
             
             # 顯示結果
             cv2.imshow('Face Landmarks - Webcam', annotated_frame)
@@ -572,10 +557,17 @@ class FaceLandmarkDetector:
                 screenshot_count += 1
                 screenshot_name = f'face_screenshot_{screenshot_count:03d}.jpg'
                 cv2.imwrite(screenshot_name, annotated_frame)
-                print(f"截圖已儲存: {screenshot_name}")
+                print(f"截圖已儲存: {screenshot_name} (FPS: {current_fps:.1f})")
+            elif key == ord('r'):
+                # 重置FPS計數器
+                self.fps_counter = 0
+                self.fps_start_time = time.time()
+                self.current_fps = 0
+                print("FPS計數器已重置")
         
         cap.release()
         cv2.destroyAllWindows()
+        print(f"攝影機關閉！最終FPS: {self.current_fps:.1f}")
     
     def get_model_info(self):
         """
@@ -657,6 +649,8 @@ def main():
         print("\n請下載 face_landmarker.task 模型檔案:")
         print("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task")
         print("並將其放在 models 目錄中")
+    except Exception as e:
+        print(f"發生錯誤: {e}")
 
 if __name__ == "__main__":
     # 直接執行範例（不使用命令列參數時）
@@ -714,6 +708,9 @@ if __name__ == "__main__":
             print("\n請下載 face_landmarker.task 模型檔案:")
             print("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task")
             print("並將其放在 models 目錄中")
+        except Exception as e:
+            print(f"發生錯誤: {e}")
+            print("請檢查您的攝影機是否正常工作，或重新啟動程式")
     
     else:
         main()
