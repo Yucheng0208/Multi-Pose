@@ -58,12 +58,14 @@ class SignLanguageDetector:
             print("✅ 使用新版 .task 模型")
         except Exception as e:
             print(f"⚠️  新版模型載入失敗，使用舊版API: {e}")
-            # ... (舊版API初始化)
+            self.use_task_models = False
+            self.hands = self.mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.7)
+            self.face_mesh = self.mp_face.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.7)
         
         self.current_roi_coords = {'face': None}
         self.frame_counter = 0
         self.base_output_dir = base_output_dir
-        self.output_json_dir = None # 將在每次執行時動態設定
+        self.output_json_dir = None
         
     def extract_face_roi_from_pose(self, image: np.ndarray, pose_keypoints: np.ndarray, person_id: int) -> Optional[np.ndarray]:
         h, w = image.shape[:2]
@@ -81,20 +83,20 @@ class SignLanguageDetector:
             if x_max > x_min and y_max > y_min:
                 self.current_roi_coords['face'] = (x_min, y_min, x_max, y_max)
                 cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 255, 255), 2)
-                cv2.putText(image, f"Face_ROI (P{person_id + 1})", (x_min, y_min-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                cv2.putText(image, f"Face_ROI (P{person_id})", (x_min, y_min-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                 return image[y_min:y_max, x_min:x_max]
         return None
 
-    def _build_and_save_json(self, num_persons, keypoints_data, frame_shape):
+    def _build_and_save_json(self, num_persons, keypoints_data, frame_shape, person_id):
         self.frame_counter += 1
         frame_json_data = {'frame_id': self.frame_counter, 'num_persons': num_persons, 'persons': []}
         h, w = frame_shape
 
-        if keypoints_data['pose'] is not None:
-            person_data = {'person_id': 0, 'keypoints': {}}
+        # 只有在偵測到人 (person_id 不是 None) 的情況下才建立人物數據
+        if person_id is not None and keypoints_data['pose'] is not None:
+            person_data = {'person_id': person_id, 'keypoints': {}}
             person_data['keypoints']['pose'] = [{'id': idx, 'x': kp[0], 'y': kp[1], 'confidence': kp[2]} for idx, kp in enumerate(keypoints_data['pose'])]
             
-            # ... (手部和臉部關鍵點處理)
             left_hand_kps, right_hand_kps = [], []
             for hand_label in ['left', 'right']:
                 hand_data = keypoints_data['hands'][hand_label]
@@ -119,9 +121,8 @@ class SignLanguageDetector:
             
             frame_json_data['persons'].append(person_data)
 
-        filename = f"{self.frame_counter:012d}.json"
-        # 確保 self.output_json_dir 已經被設定
         if self.output_json_dir:
+            filename = f"{self.frame_counter:012d}.json"
             filepath = os.path.join(self.output_json_dir, filename)
             with open(filepath, 'w') as f:
                 json.dump(frame_json_data, f, indent=4, cls=NpEncoder)
@@ -130,6 +131,7 @@ class SignLanguageDetector:
         h, w, _ = frame.shape
         keypoints_data = {'pose': None, 'hands': {'left': None, 'right': None}, 'face': None}
         
+        # --- 步驟 1: 身體姿態偵測 ---
         yolo_results = self.yolo_model(frame, conf=self.confidence, device=self.device)
         num_persons = len(yolo_results[0]) if yolo_results[0] else 0
         
@@ -139,7 +141,7 @@ class SignLanguageDetector:
             keypoints_data['pose'] = pose_keypoints
             self.draw_pose_keypoints(frame, pose_keypoints)
 
-        # ... (手部和臉部偵測)
+        # --- 步驟 2: 手部偵測 (提前執行) ---
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         hand_results = self.hand_landmarker.detect(mp_image)
@@ -151,21 +153,27 @@ class SignLanguageDetector:
                 keypoints_data['hands'][hand_label] = (landmarks, confidence)
             self.draw_hand_landmarks(frame, hand_results)
 
+        # --- 步驟 3: 臉部偵測 (依賴於姿態偵測結果) ---
+        person_id_for_tracking = None
         if pose_keypoints is not None:
-            face_roi = self.extract_face_roi_from_pose(frame, pose_keypoints, person_id=0)
+            person_id_for_tracking = 1 # 設定追蹤的人物ID為1
+            face_roi = self.extract_face_roi_from_pose(frame, pose_keypoints, person_id=person_id_for_tracking)
             if face_roi is not None and face_roi.size > 0:
-                mp_face_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB))
-                face_results = self.face_landmarker.detect(mp_face_image)
-                if face_results.face_landmarks:
-                    keypoints_data['face'] = (face_results.face_landmarks[0], 1.0)
-                    self.draw_face_landmarks(frame, face_roi, face_results)
+                try:
+                    mp_face_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB))
+                    face_results = self.face_landmarker.detect(mp_face_image)
+                    if face_results.face_landmarks:
+                        keypoints_data['face'] = (face_results.face_landmarks[0], 1.0)
+                        self.draw_face_landmarks(frame, face_roi, face_results)
+                except Exception as e:
+                    print(f"臉部檢測錯誤: {e}")
 
-        self._build_and_save_json(num_persons, keypoints_data, (h, w))
+        # --- 步驟 4: 儲存JSON (在所有偵測完成後執行) ---
+        self._build_and_save_json(num_persons, keypoints_data, (h, w), person_id=person_id_for_tracking)
         
         return frame, keypoints_data, num_persons
 
     def draw_pose_keypoints(self, image: np.ndarray, keypoints: np.ndarray):
-        # ... (繪圖邏輯)
         keypoints = keypoints.reshape(-1, 3)
         connections = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14), (14, 16)]
         for _, (x, y, conf) in enumerate(keypoints):
@@ -177,7 +185,6 @@ class SignLanguageDetector:
                     cv2.line(image, (int(sp[0]), int(sp[1])), (int(ep[0]), int(ep[1])), (255, 0, 0), 2)
     
     def draw_hand_landmarks(self, frame: np.ndarray, hand_results):
-        # ... (繪圖邏輯)
         if hand_results.hand_landmarks:
             for hand_landmarks_list in hand_results.hand_landmarks:
                 proto = landmark_pb2.NormalizedLandmarkList()
@@ -188,7 +195,6 @@ class SignLanguageDetector:
                     self.mp_drawing_styles.get_default_hand_connections_style())
 
     def draw_face_landmarks(self, frame: np.ndarray, face_roi: np.ndarray, face_results):
-        # ... (繪圖邏輯)
         roi_coords = self.current_roi_coords.get('face')
         if not roi_coords: return
         x_min, y_min, _, _ = roi_coords
@@ -204,9 +210,7 @@ class SignLanguageDetector:
                     landmark_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=-1, circle_radius=1),
                     connection_drawing_spec=self.mp_drawing_styles.get_default_face_mesh_tesselation_style())
 
-    # --- MODIFIED FUNCTION ---
     def process_realtime(self, camera_id: int = 0):
-        """即時攝像頭處理，並自動儲存影片和JSON"""
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():
             print(f"錯誤: 無法開啟攝像頭 ID {camera_id}")
@@ -215,20 +219,15 @@ class SignLanguageDetector:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         
-        # --- 自動化輸出設定 ---
-        # 1. 產生本次運行的時間戳
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
         
-        # 2. 設定並建立影片輸出路徑
         video_dir = os.path.join(self.base_output_dir, "media")
         os.makedirs(video_dir, exist_ok=True)
         video_filepath = os.path.join(video_dir, f"{timestamp}.mp4")
         
-        # 3. 設定並建立JSON輸出路徑
         self.output_json_dir = os.path.join(self.base_output_dir, "json", timestamp)
         os.makedirs(self.output_json_dir, exist_ok=True)
         
-        # 4. 設定影片寫入器
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
@@ -237,7 +236,7 @@ class SignLanguageDetector:
         
         print(f"✅ 將自動錄製影片至: {video_filepath}")
         print(f"✅ JSON檔案將儲存於: {self.output_json_dir}")
-        print("即時手語識別已啟動，按 'esc' 退出")
+        print("即時手語識別已啟動，按 'Esc' 鍵退出")
         
         prev_time = 0
         try:
@@ -247,7 +246,6 @@ class SignLanguageDetector:
                 
                 processed_frame, keypoints, num_persons = self.process_frame(frame)
                 
-                # ... (繪製FPS, 人數, 狀態等)
                 current_time = time.time()
                 real_fps = 1 / (current_time - prev_time) if (current_time - prev_time) > 0 else 0
                 prev_time = current_time
@@ -267,24 +265,20 @@ class SignLanguageDetector:
                     status_y += 30
 
                 cv2.imshow('Sign Language Detection', processed_frame)
-                
-                # 將處理後的畫面寫入影片檔
                 out.write(processed_frame)
 
-                if cv2.waitKey(1) & 0xFF == 27: break
-
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
         finally:
             cap.release()
             out.release()
             cv2.destroyAllWindows()
-            print(f"\n影片已成功儲存至: {video_filepath}")
-            print(f"JSON檔案已儲存於: {self.output_json_dir}")
+            print(f"\n✅ 影片已成功儲存至: {video_filepath}")
+            print(f"✅ JSON檔案已儲存於: {self.output_json_dir}")
 
 def main():
     parser = argparse.ArgumentParser(description='手語識別系統')
     parser.add_argument('--mode', choices=['image', 'video', 'realtime'], default='realtime')
-    parser.add_argument('--input', type=str, help='輸入檔案路徑 (用於 image/video 模式)')
-    parser.add_argument('--output', type=str, help='輸出檔案路徑 (用於 image/video 模式)')
     parser.add_argument('--camera', type=int, default=0, help='攝像頭ID')
     parser.add_argument('--model', type=str, default='models/yolo11n-pose.pt')
     parser.add_argument('--hand_model', type=str, default='models/hand_landmarker.task')
@@ -305,7 +299,7 @@ def main():
         face_model_path=args.face_model,
         device=device,
         confidence=args.confidence,
-        base_output_dir="outputs" # 指定基礎輸出資料夾
+        base_output_dir="outputs"
     )
     
     if args.mode == 'realtime':
