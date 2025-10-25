@@ -1,49 +1,51 @@
 # Multi-Pose: A Mesh-Structured Network of Keypoints for Landmark Detection
-*(多模態姿態：用於特徵點偵測的網格結構化關鍵點網絡)*
 
-**Multi-Pose** 是一個高效能、即時的框架，專為捕捉人體全面的動態特徵點而設計。本框架的核心思想是融合不同模型的優勢——結合 **YOLOv8-Pose** 的快速全身姿態估計與 **Google MediaPipe** 的高精度手部及臉部細節——從而為單一人物生成一個統一的、網格結構化的 **537個特徵點（Landmarks）** 網絡。
+**Multi-Pose** is a high-performance, real-time framework designed to capture comprehensive dynamic human feature points. The core idea of this framework is to merge the strengths of different models—combining the fast full-body pose estimation of **YOLOv8-Pose** with the high-precision hand and face details from **Google MediaPipe**—to generate a unified, mesh-structured network of **537 Landmarks** for a single person.
 
-這個系統不僅僅是一個偵測工具，它更是一個強大的數據採集引擎，為手語辨識 (SLR)、虛擬化身控制 (Avatar Control)、情感分析 (Emotion Analysis) 和進階人機互動 (HCI) 等應用提供了極其豐富、結構化的數據來源。
+This system is not merely a detection tool; it is a powerful data acquisition engine that provides an extremely rich, structured data source for applications such as Sign Language Recognition (SLR), Virtual Avatar Control, Emotion Analysis, and advanced Human-Computer Interaction (HCI).
 
-## ✨ 核心功能 (Core Features)
+## Core Features
 
--   **🚀 即時高效能 (Real-Time High Performance)**：在 GPU 加速下實現流暢的即時偵測，並能精確計算與顯示真實的處理幀率 (Real FPS)，以評估系統性能。
--   **🧩 混合模型架構 (Hybrid Model Architecture)**：
-    -   **全身姿態 (Full Body)**: 使用 `YOLOv8-Pose` 進行快速且穩健的人體偵測與17個主要關節點定位。
-    -   **精細手部 (High-Fidelity Hands)**: 使用 `MediaPipe Hands` 在全畫幅上對雙手進行偵測，捕捉每隻手21個細微的指關節點。
-    -   **密集臉部 (Dense Face Mesh)**: 使用 `MediaPipe Face Mesh` 在 YOLO 定位的臉部區域內，生成高達478個特徵點的密集網格，精準捕捉表情細節。
--   **📊 全面的特徵點覆蓋 (Comprehensive Landmark Coverage - 537 Points)**：
-    -   **身體姿態 (Pose)**: 17 個特徵點
-    -   **雙手 (Hands)**: 42 個特徵點 (21 左 + 21 右)
-    -   **臉部網格 (Face Mesh)**: 478 個特徵點
--   **💾 結構化 JSON 輸出 (Structured JSON Output)**：
-    -   為影片的每一幀生成一個獨立、序列編號的 JSON 檔案 (e.g., `000000000001.json`)。
-    -   數據格式清晰，詳細記錄了幀ID、偵測人數、人物ID，以及身體、雙手、臉部所有特徵點的索引、`x, y` 座標與信心度。
--   **🖥️ 資訊豐富的視覺化介面 (Informative Visualization)**：
-    -   即時渲染所有模型的偵測結果，包括骨架連線、手部關節和臉部網格。
-    -   動態顯示真實FPS、各模組偵測狀態 (OK/X)、總人數等關鍵資訊。
+  - **Real-Time High Performance**: Achieves smooth real-time detection under GPU acceleration and accurately calculates and displays the true processing Frame Rate (Real FPS) to evaluate system performance.
+  - **Hybrid Model Architecture**:
+      - **Full Body Pose**: Uses `YOLOv8-Pose` for fast and robust human detection and localization of 17 key joints.
+      - **High-Fidelity Hands**: Uses `MediaPipe Hands` to detect both hands across the full frame, capturing 21 fine-grained finger joint points per hand.
+      - **Dense Face Mesh**: Uses `MediaPipe Face Mesh` within the YOLO-localized face region to generate a dense mesh of up to 478 landmarks, accurately capturing expression details.
+  - **Comprehensive Landmark Coverage - 537 Points**:
+      - **Body Pose**: 17 Landmarks
+      - **Hands**: 42 Landmarks (21 Left + 21 Right)
+      - **Face Mesh**: 478 Landmarks
+  - **Structured JSON Output**:
+      - Generates a separate, sequentially numbered JSON file for every frame of the video (e.g., `000000000001.json`).
+      - The data format is clear, detailing the Frame ID, number of detected persons, Person ID, and the index, `x, y` coordinates, and confidence score for all body, hand, and face landmarks.
+  - **Informative Visualization**:
+      - Real-time rendering of detection results from all models, including skeleton connections, hand joints, and the face mesh.
+      - Dynamically displays key information such as Real FPS, detection status for each module (OK/X), and the total number of persons.
 
-## 🛠️ 技術堆疊 (Tech Stack)
+## Tech Stack
 
--   **Pose Estimation**: [Ultralytics YOLOv8-Pose](https://github.com/ultralytics/ultralytics)
--   **Hand & Face Landmarks**: [Google MediaPipe](https://developers.google.com/mediapipe)
--   **Core Framework**: PyTorch
--   **Image Processing**: OpenCV
--   **Numerical Computing**: NumPy
+  - **Pose Estimation**: [Ultralytics YOLOv8-Pose](https://github.com/ultralytics/ultralytics)
+  - **Hand & Face Landmarks**: [Google MediaPipe](https://developers.google.com/mediapipe)
+  - **Core Framework**: PyTorch
+  - **Image Processing**: OpenCV
+  - **Numerical Computing**: NumPy
 
-## ⚙️ 環境設定與安裝 (Setup and Installation)
+## Setup and Installation
 
-### 1. 前置需求
--   Python 3.8+
--   **強烈建議**: NVIDIA GPU with CUDA & cuDNN for real-time performance.
+### 1\. Prerequisites
 
-### 2. 複製此儲存庫
+  - Python 3.8+
+  - **Strongly Recommended**: NVIDIA GPU with CUDA & cuDNN for real-time performance.
+
+### 2\. Clone the Repository
+
 ```bash
-git clone [您的GitHub儲存庫連結]
+git clone [Your GitHub Repository Link]
 cd Multi-Pose
 ```
 
-### 3. 建立並啟用 Python 虛擬環境
+### 3\. Create and Activate Python Virtual Environment
+
 ```bash
 # Windows
 python -m venv venv
@@ -54,50 +56,59 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 4. 安裝依賴套件
+### 4\. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
-若無 `requirements.txt`，請手動安裝：
+
+If `requirements.txt` is not available, install manually:
+
 ```bash
 pip install ultralytics mediapipe opencv-python torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
-*(請根據您的 CUDA 版本選擇對應的 PyTorch 指令)*
 
-### 5. 下載預訓練模型
-在專案根目錄下建立 `models` 資料夾，並下載以下模型檔案放入其中。
+*(Please choose the PyTorch command corresponding to your CUDA version)*
+
+### 5\. Download Pre-trained Models
+
+Create a `models` folder in the project root and place the following model files inside.
 
 ```
 Multi-Pose/
 └── models/
-    ├── yolo11n-pose.pt       # YOLOv8-Pose model
+    ├── yolo11n-pose.pt        # YOLOv8-Pose model
     ├── hand_landmarker.task  # MediaPipe Hands model
     └── face_landmarker.task  # MediaPipe Face Mesh model
 ```
--   YOLO Models: [Ultralytics GitHub Releases](https://github.com/ultralytics/assets/releases)
--   MediaPipe Task Models: [MediaPipe for Python Models Page](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker/python#models)
 
-## 🚀 運行系統 (Running the System)
+  - YOLO Models: [Ultralytics GitHub Releases](https://github.com/ultralytics/assets/releases)
+  - MediaPipe Task Models: [MediaPipe for Python Models Page](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker/python#models)
 
-透過 `main.py` 啟動。目前主要支援即時鏡頭模式。
+## Running the System
+
+Start the system via `main.py`. Currently, the real-time webcam mode is the primary supported mode.
 
 ### Real-Time Webcam Mode
-此模式將啟動預設攝影機，並將結構化的 JSON 數據即時儲存至 `output_json/`。
+
+This mode will activate the default camera and save the structured JSON data in real-time to `output_json/`.
+
 ```bash
 python main.py --mode realtime
 ```
--   指定不同的攝影機:
+
+  - Specify a different camera:
     ```bash
     python main.py --mode realtime --camera 1
     ```
--   使用 CPU 運行 (效能將顯著降低):
+  - Run with CPU (Performance will be significantly reduced):
     ```bash
     python main.py --device cpu
     ```
 
-## 📦 輸出 JSON 數據結構 (Output JSON Data Structure)
+## Output JSON Data Structure
 
-每一幀都會生成一個 JSON 檔案，其數據結構設計清晰，便於解析與使用。
+A JSON file is generated for every frame, with a clear data structure for easy parsing and use.
 
 ```json
 {
@@ -128,28 +139,47 @@ python main.py --mode realtime
     ]
 }
 ```
--   **`frame_id`**: 幀的序列號。
--   **`num_persons`**: 畫面中偵測到的總人數。
--   **`persons`**: 包含所有人物數據的列表。
-    -   **`person_id`**: 人物的唯一ID（目前主要追蹤ID 0）。
-    -   **`keypoints`**: 包含該人物所有特徵點的物件。
-        -   **`pose`**, **`left_hand`**, **`right_hand`**, **`face`**: 各部位的特徵點列表。
-            -   **`id`**: 該部位內特徵點的索引 (e.g., 0 for nose in pose)。
-            -   **`x`, `y`**: 在原始影像畫幅中的絕對像素座標。
-            -   **`confidence`**: 該特徵點的信賴分數。
 
-## 🌱 未來規劃 (Roadmap)
+  - **`frame_id`**: Sequential number of the frame.
+  - **`num_persons`**: Total number of persons detected in the frame.
+  - **`persons`**: A list containing data for all persons.
+      - **`person_id`**: Unique ID for the person (currently primarily tracking ID 0).
+      - **`keypoints`**: An object containing all landmarks for this person.
+          - **`pose`**, **`left_hand`**, **`right_hand`**, **`face`**: Lists of landmarks for each part.
+              - **`id`**: Index of the landmark within that part (e.g., 0 for nose in pose).
+              - **`x`, `y`**: Absolute pixel coordinates in the original image frame.
+              - **`confidence`**: Confidence score for the landmark.
 
--   [ ] **多人追蹤 (Multi-Person Tracking)**: 擴充系統以同時追蹤並為畫面中的多個人生成唯一的ID和JSON數據。
--   [ ] **3D 座標支援 (3D Coordinate Support)**: 將 MediaPipe 提供的 `z` 座標整合到 JSON 輸出中，實現完整的3D姿態數據。
--   [ ] **即時辨識模組 (Real-Time Recognition Module)**: 基於輸出的關鍵點序列，開發一個用於手語或動作辨識的即時分類模組。
--   [ ] **效能優化 (Performance Optimization)**: 針對不同硬體進行模型推論優化，例如使用 TensorRT。
--   [ ] **Docker 支援 (Dockerization)**: 提供 Dockerfile 以簡化部署流程。
+## Roadmap
 
-## 🤝 貢獻 (Contributing)
+  - [ ] **Multi-Person Tracking**: Expand the system to simultaneously track and generate unique IDs and JSON data for multiple people in the frame.
+  - [ ] **3D Coordinate Support**: Integrate the `z` coordinate provided by MediaPipe into the JSON output for complete 3D pose data.
+  - [ ] **Real-Time Recognition Module**: Develop a real-time classification module for sign language or action recognition based on the output keypoint sequences.
+  - [ ] **Performance Optimization**: Optimize model inference for various hardware, such as using TensorRT.
+  - [ ] **Dockerization**: Provide a Dockerfile to simplify the deployment process.
 
-歡迎任何形式的貢獻！無論是回報問題 (Issues)、請求新功能，還是提交程式碼合併請求 (Pull Requests)，都對本專案有極大幫助。
+## Contributing
 
-## 📄 授權 (License)
+Contributions in any form are welcome\! Reporting issues, requesting new features, or submitting Pull Requests are all greatly helpful to this project.
 
-本專案採用 [MIT License](LICENSE) 授權。
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+-----
+
+## Citation
+
+If you use this system or the data generated by it for academic purposes, please cite the project using the following BibTeX format.
+
+**Note:** Since this is a GitHub project and not a published paper, we use the `@misc` type. Please replace the bracketed placeholders with the actual information (e.g., GitHub username, specific release version, and year).
+
+```bibtex
+@misc{Multipose-Yucheng0208,
+  author       = {Yucheng0208},
+  title        = {{Multi-Pose}: A Mesh-Structured Network of Keypoints for Landmark Detection},
+  howpublished = {\url{https://github.com/Yucheng0208/Multi-Pose}},
+  year         = {2026}, % 
+  note         = {GitHub Repository. Accessed: \today}
+}
+```
