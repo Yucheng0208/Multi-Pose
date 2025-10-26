@@ -1,6 +1,6 @@
 # Multi-Pose: A Mesh-Structured Network of Keypoints for Landmark Detection
 
-**Multi-Pose** is a high-performance, real-time framework designed to capture comprehensive dynamic human feature points. The core idea of this framework is to merge the strengths of different models—combining the fast full-body pose estimation of **YOLOv8-Pose** with the high-precision hand and face details from **Google MediaPipe**—to generate a unified, mesh-structured network of **537 Landmarks** for a single person.
+**Multi-Pose** is a high-performance, real-time framework designed to capture comprehensive dynamic human feature points. The core idea of this framework is to merge the strengths of different models—combining the fast full-body pose estimation of **YOLOv11-Pose** with the high-precision hand and face details from **Google MediaPipe**—to generate a unified, mesh-structured network of **537 Landmarks** for a single person.
 
 This system is not merely a detection tool; it is a powerful data acquisition engine that provides an extremely rich, structured data source for applications such as Sign Language Recognition (SLR), Virtual Avatar Control, Emotion Analysis, and advanced Human-Computer Interaction (HCI).
 
@@ -8,7 +8,7 @@ This system is not merely a detection tool; it is a powerful data acquisition en
 
   - **Real-Time High Performance**: Achieves smooth real-time detection under GPU acceleration and accurately calculates and displays the true processing Frame Rate (Real FPS) to evaluate system performance.
   - **Hybrid Model Architecture**:
-      - **Full Body Pose**: Uses `YOLOv8-Pose` for fast and robust human detection and localization of 17 key joints.
+      - **Full Body Pose**: Uses `YOLOv11-Pose` for fast and robust human detection and localization of 17 key joints.
       - **High-Fidelity Hands**: Uses `MediaPipe Hands` to detect both hands across the full frame, capturing 21 fine-grained finger joint points per hand.
       - **Dense Face Mesh**: Uses `MediaPipe Face Mesh` within the YOLO-localized face region to generate a dense mesh of up to 478 landmarks, accurately capturing expression details.
   - **Comprehensive Landmark Coverage - 537 Points**:
@@ -24,7 +24,7 @@ This system is not merely a detection tool; it is a powerful data acquisition en
 
 ## Tech Stack
 
-  - **Pose Estimation**: [Ultralytics YOLOv8-Pose](https://github.com/ultralytics/ultralytics)
+  - **Pose Estimation**: [Ultralytics YOLOv11-Pose](https://github.com/ultralytics/ultralytics)
   - **Hand & Face Landmarks**: [Google MediaPipe](https://developers.google.com/mediapipe)
   - **Core Framework**: PyTorch
   - **Image Processing**: OpenCV
