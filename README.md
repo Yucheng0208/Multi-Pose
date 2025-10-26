@@ -150,14 +150,6 @@ A JSON file is generated for every frame, with a clear data structure for easy p
               - **`x`, `y`**: Absolute pixel coordinates in the original image frame.
               - **`confidence`**: Confidence score for the landmark.
 
-## Roadmap
-
-  - [ ] **Multi-Person Tracking**: Expand the system to simultaneously track and generate unique IDs and JSON data for multiple people in the frame.
-  - [ ] **3D Coordinate Support**: Integrate the `z` coordinate provided by MediaPipe into the JSON output for complete 3D pose data.
-  - [ ] **Real-Time Recognition Module**: Develop a real-time classification module for sign language or action recognition based on the output keypoint sequences.
-  - [ ] **Performance Optimization**: Optimize model inference for various hardware, such as using TensorRT.
-  - [ ] **Dockerization**: Provide a Dockerfile to simplify the deployment process.
-
 ## Contributing
 
 Contributions in any form are welcome\! Reporting issues, requesting new features, or submitting Pull Requests are all greatly helpful to this project.
